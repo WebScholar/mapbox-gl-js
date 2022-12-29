@@ -14,6 +14,10 @@
     "node": ">=6.4.0"
   },
   "dependencies": {
+    "@cgcs2000/geojson-vt": "^3.2.1",
+    "@cgcs2000/supercluster": "^7.1.3",
+    "@cgcs2000/vector-tile": "^1.3.3",
+    "@cgcs2000/whoots-js": "^3.1.0",
     "@mapbox/geojson-rewind": "^0.5.0",
     "@mapbox/geojson-types": "^1.0.2",
     "@mapbox/jsonlint-lines-primitives": "^2.0.2",
