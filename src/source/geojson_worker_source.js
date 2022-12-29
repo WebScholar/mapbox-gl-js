@@ -1,16 +1,18 @@
 // @flow
 
-import {getJSON} from '../util/ajax.js';
+import { getJSON } from '../util/ajax.js';
 
-import {getPerformanceMeasurement} from '../util/performance.js';
+import { getPerformanceMeasurement } from '../util/performance.js';
 import rewind from '@mapbox/geojson-rewind';
 import GeoJSONWrapper from './geojson_wrapper.js';
 import vtpbf from 'vt-pbf';
 import Supercluster from 'supercluster';
 import geojsonvt from 'geojson-vt';
+import Supercluster_cgcs2000 from '@cgcs2000/supercluster';
+import geojsonvt_cgcs2000 from '@cgcs2000/geojson-vt';
 import assert from 'assert';
 import VectorTileWorkerSource from './vector_tile_worker_source.js';
-import {createExpression} from '../style-spec/expression/index.js';
+import { createExpression } from '../style-spec/expression/index.js';
 
 import type {
     RequestedTileParameters,
@@ -21,10 +23,11 @@ import type {
 import type Actor from '../util/actor.js';
 import type StyleLayerIndex from '../style/style_layer_index.js';
 
-import type {LoadVectorDataCallback} from './vector_tile_worker_source.js';
-import type {RequestParameters, ResponseCallback} from '../util/ajax.js';
-import type {Callback} from '../types/callback.js';
-import type {GeoJSONFeature} from '@mapbox/geojson-types';
+import type { LoadVectorDataCallback } from './vector_tile_worker_source.js';
+import type { RequestParameters, ResponseCallback } from '../util/ajax.js';
+import type { Callback } from '../types/callback.js';
+import type { GeoJSONFeature } from '@mapbox/geojson-types';
+import constants from '../util/constants.js';
 
 export type LoadGeoJSONParameters = {
     request?: RequestParameters,
@@ -121,7 +124,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
      * @param callback
      * @private
      */
-    loadData(params: LoadGeoJSONParameters, callback: Callback<{resourceTiming?: {[_: string]: Array<PerformanceResourceTiming>}}>) {
+    loadData(params: LoadGeoJSONParameters, callback: Callback<{ resourceTiming?: { [_: string]: Array<PerformanceResourceTiming> } }>) {
         const requestParam = params && params.request;
         const perf = requestParam && requestParam.collectResourceTiming;
 
@@ -135,17 +138,17 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
 
                 try {
                     if (params.filter) {
-                        const compiled = createExpression(params.filter, {type: 'boolean', 'property-type': 'data-driven', overridable: false, transition: false});
+                        const compiled = createExpression(params.filter, { type: 'boolean', 'property-type': 'data-driven', overridable: false, transition: false });
                         if (compiled.result === 'error')
                             throw new Error(compiled.value.map(err => `${err.key}: ${err.message}`).join(', '));
 
-                        const features = data.features.filter(feature => compiled.value.evaluate({zoom: 0}, feature));
-                        data = {type: 'FeatureCollection', features};
+                        const features = data.features.filter(feature => compiled.value.evaluate({ zoom: 0 }, feature));
+                        data = { type: 'FeatureCollection', features };
                     }
 
                     this._geoJSONIndex = params.cluster ?
-                        new Supercluster(getSuperclusterOptions(params)).load(data.features) :
-                        geojsonvt(data, params.geojsonVtOptions);
+                        new (constants.gl_projection === 'EPSG:4326' ? Supercluster_cgcs2000 : Supercluster)(getSuperclusterOptions(params)).load(data.features) :
+                        (constants.gl_projection === 'EPSG:4326' ? geojsonvt_cgcs2000 : geojsonvt)(data, params.geojsonVtOptions);
                 } catch (err) {
                     return callback(err);
                 }
@@ -218,7 +221,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
         }
     }
 
-    getClusterExpansionZoom(params: {clusterId: number}, callback: Callback<number>) {
+    getClusterExpansionZoom(params: { clusterId: number }, callback: Callback<number>) {
         try {
             callback(null, this._geoJSONIndex.getClusterExpansionZoom(params.clusterId));
         } catch (e) {
@@ -226,7 +229,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
         }
     }
 
-    getClusterChildren(params: {clusterId: number}, callback: Callback<Array<GeoJSONFeature>>) {
+    getClusterChildren(params: { clusterId: number }, callback: Callback<Array<GeoJSONFeature>>) {
         try {
             callback(null, this._geoJSONIndex.getChildren(params.clusterId));
         } catch (e) {
@@ -234,7 +237,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
         }
     }
 
-    getClusterLeaves(params: {clusterId: number, limit: number, offset: number}, callback: Callback<Array<GeoJSONFeature>>) {
+    getClusterLeaves(params: { clusterId: number, limit: number, offset: number }, callback: Callback<Array<GeoJSONFeature>>) {
         try {
             callback(null, this._geoJSONIndex.getLeaves(params.clusterId, params.limit, params.offset));
         } catch (e) {
@@ -243,13 +246,13 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
     }
 }
 
-function getSuperclusterOptions({superclusterOptions, clusterProperties}) {
+function getSuperclusterOptions({ superclusterOptions, clusterProperties }) {
     if (!clusterProperties || !superclusterOptions) return superclusterOptions;
 
     const mapExpressions = {};
     const reduceExpressions = {};
-    const globals = {accumulated: null, zoom: 0};
-    const feature = {properties: null};
+    const globals = { accumulated: null, zoom: 0 };
+    const feature = { properties: null };
     const propertyNames = Object.keys(clusterProperties);
 
     for (const key of propertyNames) {

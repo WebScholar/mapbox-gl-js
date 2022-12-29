@@ -494,7 +494,8 @@ class SourceCache extends Evented {
                 maxzoom: this._source.maxzoom,
                 roundZoom: this._source.roundZoom && !updateForTerrain,
                 reparseOverscaled: this._source.reparseOverscaled,
-                isTerrainDEM: this.usedForTerrain
+                isTerrainDEM: this.usedForTerrain,
+                useElevationData: !!this.transform.elevation && !this.usedForTerrain
             });
 
             if (this._source.hasTile) {

@@ -2,25 +2,26 @@
 
 import LngLat from './lng_lat.js';
 import LngLatBounds from './lng_lat_bounds.js';
-import MercatorCoordinate, {mercatorXfromLng, mercatorYfromLat, mercatorZfromAltitude, latFromMercatorY} from './mercator_coordinate.js';
+import MercatorCoordinate, { mercatorXfromLng, mercatorYfromLat, mercatorZfromAltitude, latFromMercatorY } from './mercator_coordinate.js';
 import Point from '@mapbox/point-geometry';
-import {wrap, clamp, radToDeg, degToRad, getAABBPointSquareDist, furthestTileCorner} from '../util/util.js';
-import {number as interpolate} from '../style-spec/util/interpolate.js';
+import { wrap, clamp, radToDeg, degToRad, getAABBPointSquareDist, furthestTileCorner } from '../util/util.js';
+import { number as interpolate } from '../style-spec/util/interpolate.js';
 import EXTENT from '../data/extent.js';
-import {vec4, mat4, mat2, vec3, quat} from 'gl-matrix';
-import {Aabb, Frustum, Ray} from '../util/primitives.js';
+import { vec4, mat4, mat2, vec3, quat } from 'gl-matrix';
+import { Aabb, Frustum, Ray } from '../util/primitives.js';
 import EdgeInsets from './edge_insets.js';
-import {FreeCamera, FreeCameraOptions, orientationFromFrame} from '../ui/free_camera.js';
+import { FreeCamera, FreeCameraOptions, orientationFromFrame } from '../ui/free_camera.js';
 import assert from 'assert';
 
-import {UnwrappedTileID, OverscaledTileID, CanonicalTileID} from '../source/tile_id.js';
-import type {Elevation} from '../terrain/elevation.js';
-import type {PaddingOptions} from './edge_insets.js';
+import { UnwrappedTileID, OverscaledTileID, CanonicalTileID } from '../source/tile_id.js';
+import type { Elevation } from '../terrain/elevation.js';
+import type { PaddingOptions } from './edge_insets.js';
+import constants from '../util/constants.js';
 
 const NUM_WORLD_COPIES = 3;
 const DEFAULT_MIN_ZOOM = 0;
 
-type RayIntersectionResult = { p0: vec4, p1: vec4, t: number};
+type RayIntersectionResult = { p0: vec4, p1: vec4, t: number };
 type ElevationReference = "sea" | "ground";
 
 /**
@@ -71,16 +72,16 @@ class Transform {
     _center: LngLat;
     _edgeInsets: EdgeInsets;
     _constraining: boolean;
-    _projMatrixCache: {[_: number]: Float32Array};
-    _alignedProjMatrixCache: {[_: number]: Float32Array};
-    _fogTileMatrixCache: {[_: number]: Float32Array};
+    _projMatrixCache: { [_: number]: Float32Array };
+    _alignedProjMatrixCache: { [_: number]: Float32Array };
+    _fogTileMatrixCache: { [_: number]: Float32Array };
     _camera: FreeCamera;
     _centerAltitude: number;
     _horizonShift: number;
 
     constructor(minZoom: ?number, maxZoom: ?number, minPitch: ?number, maxPitch: ?number, renderWorldCopies: boolean | void) {
         this.tileSize = 512; // constant
-        this.maxValidLatitude = 85.051129; // constant
+        this.maxValidLatitude = constants.gl_projection === 'EPSG:4326' ? 90 : 85.051129; // constant
 
         this._renderWorldCopies = renderWorldCopies === undefined ? true : renderWorldCopies;
         this._minZoom = minZoom || DEFAULT_MIN_ZOOM;
@@ -380,7 +381,7 @@ class Transform {
         const cameraZoom: number = this._cameraZoom;
         const elevationAtCenter = this._elevation.getAtPointOrZero(MercatorCoordinate.fromLngLat(this.center));
         const mercatorElevation = mercatorZfromAltitude(elevationAtCenter, this.center.lat);
-        const altitude  = this._mercatorZfromZoom(cameraZoom);
+        const altitude = this._mercatorZfromZoom(cameraZoom);
         const minHeight = this._mercatorZfromZoom(this._maxZoom);
         const height = Math.max(altitude - mercatorElevation, minHeight);
 
@@ -547,7 +548,7 @@ class Transform {
      * @param {boolean} options.roundZoom Target zoom level. If true, the value will be rounded to the closest integer. Otherwise the value will be floored.
      * @returns {number} zoom level An integer zoom level at which all tiles will be visible.
      */
-    coveringZoomLevel(options: {roundZoom?: boolean, tileSize: number}) {
+    coveringZoomLevel(options: { roundZoom?: boolean, tileSize: number }) {
         const z = (options.roundZoom ? Math.round : Math.floor)(
             this.zoom + this.scaleZoom(this.tileSize / options.tileSize)
         );
@@ -604,13 +605,14 @@ class Transform {
             roundZoom?: boolean,
             reparseOverscaled?: boolean,
             renderWorldCopies?: boolean,
-            isTerrainDEM?: boolean
+            isTerrainDEM?: boolean,
+            useElevationData?: boolean
         }
     ): Array<OverscaledTileID> {
         let z = this.coveringZoomLevel(options);
         const actualZ = z;
 
-        const useElevationData = this.elevation && !options.isTerrainDEM;
+        const useElevationData = constants.gl_projection === 'EPSG:4326' ? !!options.useElevationData : this.elevation && !options.isTerrainDEM;
 
         if (options.minzoom !== undefined && z < options.minzoom) return [];
         if (options.maxzoom !== undefined && z > options.maxzoom) z = options.maxzoom;
@@ -638,7 +640,7 @@ class Transform {
         const minRange = options.isTerrainDEM ? -maxRange : this._elevation ? this._elevation.getMinElevationBelowMSL() : 0;
         const newRootTile = (wrap: number): any => {
             const max = maxRange;
-            const min = minRange;
+            const min = constants.gl_projection === 'EPSG:4326' ? -maxRange : minRange;
             return {
                 // With elevation, this._elevation provides z coordinate values. For 2D:
                 // All tiles are on zero elevation plane => z difference is zero
@@ -700,7 +702,7 @@ class Transform {
             // 1 / acuteAngleThresholdSin + (stretchTile ^ (k + 1) - 1) / (stretchTile - 1) - 1
             if (dSqr * square(acuteAngleThresholdSin) < dzSqr) return 1.0; // Early return, no scale.
             const r = Math.sqrt(dSqr / dzSqr);
-            const k =  r - 1 / acuteAngleThresholdSin;
+            const k = r - 1 / acuteAngleThresholdSin;
             return r / (1 / acuteAngleThresholdSin + (Math.pow(stretchTile, k + 1) - 1) / (stretchTile - 1) - 1);
         };
 
@@ -766,7 +768,7 @@ class Transform {
                 const dy = centerPoint[1] - 0.5 - y;
                 const id = it.tileID ? it.tileID : new OverscaledTileID(tileZoom, it.wrap, it.zoom, x, y);
 
-                result.push({tileID: id, distanceSq: dx * dx + dy * dy});
+                result.push({ tileID: id, distanceSq: dx * dx + dy * dy });
                 continue;
             }
 
@@ -775,7 +777,7 @@ class Transform {
                 const childY = (y << 1) + (i >> 1);
 
                 const aabb = it.aabb.quadrant(i);
-                const child = {aabb, zoom: it.zoom + 1, x: childX, y: childY, wrap: it.wrap, fullyVisible, tileID: undefined, shouldSplit: undefined};
+                const child = { aabb, zoom: it.zoom + 1, x: childX, y: childY, wrap: it.wrap, fullyVisible, tileID: undefined, shouldSplit: undefined };
                 if (useElevationData) {
                     child.tileID = new OverscaledTileID(it.zoom + 1 === maxZoom ? overscaledZ : it.zoom + 1, it.wrap, it.zoom + 1, childX, childY);
                     getAABBFromElevation(child);
@@ -809,7 +811,7 @@ class Transform {
                         minmax = this._elevation.getMinMaxForTile(entry.tileID);
                     }
 
-                    if (!minmax) { minmax = {min: minRange, max: maxRange}; }
+                    if (!minmax) { minmax = { min: minRange, max: maxRange }; }
 
                     const cornerFar = furthestTileCorner(this.bearing);
 
@@ -857,8 +859,8 @@ class Transform {
     project(lnglat: LngLat) {
         const lat = clamp(lnglat.lat, -this.maxValidLatitude, this.maxValidLatitude);
         return new Point(
-                mercatorXfromLng(lnglat.lng) * this.worldSize,
-                mercatorYfromLat(lat) * this.worldSize);
+            mercatorXfromLng(lnglat.lng) * this.worldSize,
+            mercatorYfromLat(lat) * this.worldSize);
     }
 
     unproject(point: Point): LngLat {
@@ -872,8 +874,8 @@ class Transform {
         const b = this.pointCoordinate(this.centerPoint);
         const loc = this.locationCoordinate(lnglat);
         const newCenter = new MercatorCoordinate(
-                loc.x - (a.x - b.x),
-                loc.y - (a.y - b.y));
+            loc.x - (a.x - b.x),
+            loc.y - (a.y - b.y));
         this.center = this.coordinateLocation(newCenter);
         if (this._renderWorldCopies) {
             this.center = this.center.wrap();
@@ -987,7 +989,7 @@ class Transform {
 
         const t = z0 === z1 ? 0 : (targetZ - z0) / (z1 - z0);
 
-        return {p0, p1, t};
+        return { p0, p1, t };
     }
 
     screenPointToMercatorRay(p: Point): Ray {
@@ -1018,7 +1020,7 @@ class Transform {
      * @private
      */
     rayIntersectionCoordinate(rayIntersection: RayIntersectionResult): MercatorCoordinate {
-        const {p0, p1, t} = rayIntersection;
+        const { p0, p1, t } = rayIntersection;
 
         const z0 = mercatorZfromAltitude(p0[2], this._center.lat);
         const z1 = mercatorZfromAltitude(p1[2], this._center.lat);
@@ -1131,7 +1133,7 @@ class Transform {
                 acc.max = Math.max(acc.max, tree.maximums[0]);
             }
             return acc;
-        }, {min: Number.MAX_VALUE, max: 0});
+        }, { min: Number.MAX_VALUE, max: 0 });
         minmax.min *= elevation.exaggeration();
         minmax.max *= elevation.exaggeration();
         const top = this.horizonLineFromTop();
@@ -1292,7 +1294,7 @@ class Transform {
         this._updateCameraState();
         const elevationAtCamera = elevation.getAtPointOrZero(this._camera.mercatorPosition);
 
-        const minHeight = this._minimumHeightOverTerrain() *  Math.cos(degToRad(this._maxPitch));
+        const minHeight = this._minimumHeightOverTerrain() * Math.cos(degToRad(this._maxPitch));
         const terrainElevation = mercatorZfromAltitude(elevationAtCamera, this._center.lat);
         const cameraHeight = this._camera.position[2] - terrainElevation;
 
@@ -1511,7 +1513,7 @@ class Transform {
             dx = x - Math.round(x) + angleCos * xShift + angleSin * yShift,
             dy = y - Math.round(y) + angleCos * yShift + angleSin * xShift;
         const alignedM = new Float64Array(m);
-        mat4.translate(alignedM, alignedM, [ dx > 0.5 ? dx - 1 : dx, dy > 0.5 ? dy - 1 : dy, 0 ]);
+        mat4.translate(alignedM, alignedM, [dx > 0.5 ? dx - 1 : dx, dy > 0.5 ? dy - 1 : dy, 0]);
         this.alignedProjMatrix = alignedM;
 
         m = mat4.create();
@@ -1618,7 +1620,7 @@ class Transform {
     _updateStateFromCamera() {
         const position = this._camera.position;
         const dir = this._camera.forward();
-        const {pitch, bearing} = this._camera.getPitchBearing();
+        const { pitch, bearing } = this._camera.getPitchBearing();
 
         // Compute zoom from the distance between camera and terrain
         const centerAltitude = mercatorZfromAltitude(this._centerAltitude, this.center.lat);

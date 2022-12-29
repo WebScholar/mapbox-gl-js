@@ -3,20 +3,22 @@
 import Point from '@mapbox/point-geometry';
 
 import mvt from '@mapbox/vector-tile';
+import mvt_cgcs2000 from '@cgcs2000/vector-tile';
 const toGeoJSON = mvt.VectorTileFeature.prototype.toGeoJSON;
 import EXTENT from '../data/extent.js';
+import constants from '../util/constants.js';
 
 // The feature type used by geojson-vt and supercluster. Should be extracted to
 // global type and used in module definitions for those two modules.
 type Feature = {
     type: 1,
     id: mixed,
-    tags: {[_: string]: string | number | boolean},
+    tags: { [_: string]: string | number | boolean },
     geometry: Array<[number, number]>,
 } | {
     type: 2 | 3,
     id: mixed,
-    tags: {[_: string]: string | number | boolean},
+    tags: { [_: string]: string | number | boolean },
     geometry: Array<Array<[number, number]>>,
 }
 
@@ -26,7 +28,7 @@ class FeatureWrapper implements VectorTileFeature {
     extent: number;
     type: 1 | 2 | 3;
     id: number;
-    properties: {[_: string]: string | number | boolean};
+    properties: { [_: string]: string | number | boolean };
 
     constructor(feature: Feature) {
         this._feature = feature;
@@ -67,19 +69,19 @@ class FeatureWrapper implements VectorTileFeature {
     }
 
     toGeoJSON(x: number, y: number, z: number) {
-        return toGeoJSON.call(this, x, y, z);
+        return (constants.gl_projection === 'EPSG:4326' ? mvt_cgcs2000 : mvt).VectorTileFeature.prototype.toGeoJSON.call(this, x, y, z);
     }
 }
 
 class GeoJSONWrapper implements VectorTile, VectorTileLayer {
-    layers: {[_: string]: VectorTileLayer};
+    layers: { [_: string]: VectorTileLayer };
     name: string;
     extent: number;
     length: number;
     _features: Array<Feature>;
 
     constructor(features: Array<Feature>) {
-        this.layers = {'_geojsonTileLayer': this};
+        this.layers = { '_geojsonTileLayer': this };
         this.name = '_geojsonTileLayer';
         this.extent = EXTENT;
         this.length = features.length;

@@ -9,24 +9,26 @@ import featureFilter from '../style-spec/feature_filter/index.js';
 import Grid from 'grid-index';
 import DictionaryCoder from '../util/dictionary_coder.js';
 import vt from '@mapbox/vector-tile';
+import vt_cgcs2000 from '@cgcs2000/vector-tile';
 import Protobuf from 'pbf';
 import GeoJSONFeature from '../util/vectortile_to_geojson.js';
-import {arraysIntersect, mapObject, extend} from '../util/util.js';
-import {OverscaledTileID} from '../source/tile_id.js';
-import {register} from '../util/web_worker_transfer.js';
+import { arraysIntersect, mapObject, extend } from '../util/util.js';
+import { OverscaledTileID } from '../source/tile_id.js';
+import { register } from '../util/web_worker_transfer.js';
 import EvaluationParameters from '../style/evaluation_parameters.js';
 import SourceFeatureState from '../source/source_state.js';
-import {polygonIntersectsBox} from '../util/intersection_tests.js';
-import {PossiblyEvaluated} from '../style/properties.js';
-import {FeatureIndexArray} from './array_types.js';
-import {DEMSampler} from '../terrain/elevation.js';
+import { polygonIntersectsBox } from '../util/intersection_tests.js';
+import { PossiblyEvaluated } from '../style/properties.js';
+import { FeatureIndexArray } from './array_types.js';
+import { DEMSampler } from '../terrain/elevation.js';
 
 import type StyleLayer from '../style/style_layer.js';
-import type {FeatureFilter} from '../style-spec/feature_filter/index.js';
+import type { FeatureFilter } from '../style-spec/feature_filter/index.js';
 import type Transform from '../geo/transform.js';
-import type {FilterSpecification, PromoteIdSpecification} from '../style-spec/types.js';
-import type {TilespaceQueryGeometry} from '../style/query_geometry.js';
-import type {FeatureIndex as FeatureIndexStruct} from './array_types.js';
+import type { FilterSpecification, PromoteIdSpecification } from '../style-spec/types.js';
+import type { TilespaceQueryGeometry } from '../style/query_geometry.js';
+import type { FeatureIndex as FeatureIndexStruct } from './array_types.js';
+import constants from '../util/constants.js';
 
 type QueryParameters = {
     pixelPosMatrix: Float32Array,
@@ -58,7 +60,7 @@ class FeatureIndex {
     rawTileData: ArrayBuffer;
     bucketLayerIDs: Array<Array<string>>;
 
-    vtLayers: {[_: string]: VectorTileLayer};
+    vtLayers: { [_: string]: VectorTileLayer };
     sourceLayerCoder: DictionaryCoder;
 
     constructor(tileID: OverscaledTileID, promoteId?: ?PromoteIdSpecification) {
@@ -98,16 +100,16 @@ class FeatureIndex {
         }
     }
 
-    loadVTLayers(): {[_: string]: VectorTileLayer} {
+    loadVTLayers(): { [_: string]: VectorTileLayer } {
         if (!this.vtLayers) {
-            this.vtLayers = new vt.VectorTile(new Protobuf(this.rawTileData)).layers;
+            this.vtLayers = new (constants.gl_projection === 'EPSG:4326' ? vt_cgcs2000 : vt).VectorTile(new Protobuf(this.rawTileData)).layers;
             this.sourceLayerCoder = new DictionaryCoder(this.vtLayers ? Object.keys(this.vtLayers).sort() : ['_geojsonTileLayer']);
         }
         return this.vtLayers;
     }
 
     // Finds non-symbol features in this tile at a particular position.
-    query(args: QueryParameters, styleLayers: {[_: string]: StyleLayer}, serializedLayers: {[_: string]: Object}, sourceFeatureState: SourceFeatureState): {[_: string]: Array<{ featureIndex: number, feature: GeoJSONFeature }>} {
+    query(args: QueryParameters, styleLayers: { [_: string]: StyleLayer }, serializedLayers: { [_: string]: Object }, sourceFeatureState: SourceFeatureState): { [_: string]: Array<{ featureIndex: number, feature: GeoJSONFeature }> } {
         this.loadVTLayers();
         const params = args.params || {},
             filter = featureFilter(params.filter);
@@ -160,17 +162,17 @@ class FeatureIndex {
     }
 
     loadMatchingFeature(
-        result: {[_: string]: Array<{ featureIndex: number, feature: GeoJSONFeature }>},
+        result: { [_: string]: Array<{ featureIndex: number, feature: GeoJSONFeature }> },
         featureIndexData: FeatureIndices,
         filter: FeatureFilter,
         filterLayerIDs: Array<string>,
         availableImages: Array<string>,
-        styleLayers: {[_: string]: StyleLayer},
-        serializedLayers: {[_: string]: Object},
+        styleLayers: { [_: string]: StyleLayer },
+        serializedLayers: { [_: string]: Object },
         sourceFeatureState?: SourceFeatureState,
         intersectionTest?: (feature: VectorTileFeature, styleLayer: StyleLayer, featureState: Object, layoutVertexArrayOffset: number) => boolean | number) {
 
-        const {featureIndex, bucketIndex, sourceLayerIndex, layoutVertexArrayOffset} = featureIndexData;
+        const { featureIndex, bucketIndex, sourceLayerIndex, layoutVertexArrayOffset } = featureIndexData;
         const layerIDs = this.bucketLayerIDs[bucketIndex];
         if (filterLayerIDs && !arraysIntersect(filterLayerIDs, layerIDs))
             return;
@@ -224,20 +226,20 @@ class FeatureIndex {
             if (layerResult === undefined) {
                 layerResult = result[layerID] = [];
             }
-            layerResult.push({featureIndex, feature: geojsonFeature, intersectionZ});
+            layerResult.push({ featureIndex, feature: geojsonFeature, intersectionZ });
         }
     }
 
     // Given a set of symbol indexes that have already been looked up,
     // return a matching set of GeoJSONFeatures
     lookupSymbolFeatures(symbolFeatureIndexes: Array<number>,
-                         serializedLayers: {[string]: StyleLayer},
-                         bucketIndex: number,
-                         sourceLayerIndex: number,
-                         filterSpec: FilterSpecification,
-                         filterLayerIDs: Array<string>,
-                         availableImages: Array<string>,
-                         styleLayers: {[_: string]: StyleLayer}) {
+        serializedLayers: { [string]: StyleLayer },
+        bucketIndex: number,
+        sourceLayerIndex: number,
+        filterSpec: FilterSpecification,
+        filterLayerIDs: Array<string>,
+        availableImages: Array<string>,
+        styleLayers: { [_: string]: StyleLayer }) {
         const result = {};
         this.loadVTLayers();
 
@@ -246,11 +248,11 @@ class FeatureIndex {
         for (const symbolFeatureIndex of symbolFeatureIndexes) {
             this.loadMatchingFeature(
                 result, {
-                    bucketIndex,
-                    sourceLayerIndex,
-                    featureIndex: symbolFeatureIndex,
-                    layoutVertexArrayOffset: 0
-                },
+                bucketIndex,
+                sourceLayerIndex,
+                featureIndex: symbolFeatureIndex,
+                layoutVertexArrayOffset: 0
+            },
                 filter,
                 filterLayerIDs,
                 availableImages,
@@ -277,7 +279,7 @@ class FeatureIndex {
         if (this.promoteId) {
             const propName = typeof this.promoteId === 'string' ? this.promoteId : this.promoteId[sourceLayerId];
             id = feature.properties[propName];
-            if (typeof id === 'boolean') id =  Number(id);
+            if (typeof id === 'boolean') id = Number(id);
         }
         return id;
     }
@@ -286,7 +288,7 @@ class FeatureIndex {
 register(
     'FeatureIndex',
     FeatureIndex,
-    {omit: ['rawTileData', 'sourceLayerCoder']}
+    { omit: ['rawTileData', 'sourceLayerCoder'] }
 );
 
 export default FeatureIndex;

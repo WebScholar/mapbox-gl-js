@@ -1,26 +1,26 @@
 // @flow
 
-import {Event, ErrorEvent, Evented} from '../util/evented.js';
+import { Event, ErrorEvent, Evented } from '../util/evented.js';
 
-import {extend, pick} from '../util/util.js';
+import { extend, pick } from '../util/util.js';
 import loadTileJSON from './load_tilejson.js';
-import {postTurnstileEvent} from '../util/mapbox.js';
+import { postTurnstileEvent } from '../util/mapbox.js';
 import TileBounds from './tile_bounds.js';
-import {ResourceType} from '../util/ajax.js';
+import { ResourceType } from '../util/ajax.js';
 import browser from '../util/browser.js';
-import {cacheEntryPossiblyAdded} from '../util/tile_request_cache.js';
-import {DedupedRequest, loadVectorTile} from './vector_tile_worker_source.js';
+import { cacheEntryPossiblyAdded } from '../util/tile_request_cache.js';
+import { DedupedRequest, loadVectorTile } from './vector_tile_worker_source.js';
 
-import type {Source} from './source.js';
-import type {OverscaledTileID} from './tile_id.js';
+import type { Source } from './source.js';
+import type { OverscaledTileID } from './tile_id.js';
 import type Map from '../ui/map.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
-import type {Callback} from '../types/callback.js';
-import type {Cancelable} from '../types/cancelable.js';
-import type {VectorSourceSpecification, PromoteIdSpecification} from '../style-spec/types.js';
+import type { Callback } from '../types/callback.js';
+import type { Cancelable } from '../types/cancelable.js';
+import type { VectorSourceSpecification, PromoteIdSpecification } from '../style-spec/types.js';
 import type Actor from '../util/actor.js';
-import type {LoadVectorTileResult} from './vector_tile_worker_source.js';
+import type { LoadVectorTileResult } from './vector_tile_worker_source.js';
 
 /**
  * A source containing vector tiles in [Mapbox Vector Tile format](https://docs.mapbox.com/vector-tiles/reference/).
@@ -57,6 +57,7 @@ class VectorTileSource extends Evented implements Source {
     scheme: string;
     tileSize: number;
     promoteId: ?PromoteIdSpecification;
+    zoomoffset: Number;
 
     _options: VectorSourceSpecification;
     _collectResourceTiming: boolean;
@@ -69,10 +70,10 @@ class VectorTileSource extends Evented implements Source {
     isTileClipped: boolean;
     _tileJSONRequest: ?Cancelable;
     _loaded: boolean;
-    _tileWorkers: {[string]: Actor};
+    _tileWorkers: { [string]: Actor };
     _deduped: DedupedRequest;
 
-    constructor(id: string, options: VectorSourceSpecification & {collectResourceTiming: boolean}, dispatcher: Dispatcher, eventedParent: Evented) {
+    constructor(id: string, options: VectorSourceSpecification & { collectResourceTiming: boolean }, dispatcher: Dispatcher, eventedParent: Evented) {
         super();
         this.id = id;
         this.dispatcher = dispatcher;
@@ -82,12 +83,13 @@ class VectorTileSource extends Evented implements Source {
         this.maxzoom = 22;
         this.scheme = 'xyz';
         this.tileSize = 512;
+        this.zoomoffset = 0;
         this.reparseOverscaled = true;
         this.isTileClipped = true;
         this._loaded = false;
 
-        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId']));
-        this._options = extend({type: 'vector'}, options);
+        extend(this, pick(options, ['url', 'scheme', 'tileSize', 'promoteId', 'zoomoffset']));
+        this._options = extend({ type: 'vector' }, options);
 
         this._collectResourceTiming = options.collectResourceTiming;
 
@@ -103,7 +105,7 @@ class VectorTileSource extends Evented implements Source {
 
     load() {
         this._loaded = false;
-        this.fire(new Event('dataloading', {dataType: 'source'}));
+        this.fire(new Event('dataloading', { dataType: 'source' }));
         this._tileJSONRequest = loadTileJSON(this._options, this.map._requestManager, (err, tileJSON) => {
             this._tileJSONRequest = null;
             this._loaded = true;
@@ -117,8 +119,8 @@ class VectorTileSource extends Evented implements Source {
                 // `content` is included here to prevent a race condition where `Style#_updateSources` is called
                 // before the TileJSON arrives. this makes sure the tiles needed are loaded once TileJSON arrives
                 // ref: https://github.com/mapbox/mapbox-gl-js/pull/4347#discussion_r104418088
-                this.fire(new Event('data', {dataType: 'source', sourceDataType: 'metadata'}));
-                this.fire(new Event('data', {dataType: 'source', sourceDataType: 'content'}));
+                this.fire(new Event('data', { dataType: 'source', sourceDataType: 'metadata' }));
+                this.fire(new Event('data', { dataType: 'source', sourceDataType: 'content' }));
             }
         });
     }
@@ -191,7 +193,7 @@ class VectorTileSource extends Evented implements Source {
     }
 
     loadTile(tile: Tile, callback: Callback<void>) {
-        const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme));
+        const url = this.map._requestManager.normalizeTileURL(tile.tileID.canonical.url(this.tiles, this.scheme, this.zoomoffset));
         const request = this.map._requestManager.transformRequest(url, ResourceType.Tile);
 
         const params = {
@@ -217,7 +219,7 @@ class VectorTileSource extends Evented implements Source {
             // if workers are not ready to receive messages yet, use the idle time to preemptively
             // load tiles on the main thread and pass the result instead of requesting a worker to do so
             if (!this.dispatcher.ready) {
-                const cancel = loadVectorTile.call({deduped: this._deduped}, params, (err: ?Error, data: ?LoadVectorTileResult) => {
+                const cancel = loadVectorTile.call({ deduped: this._deduped }, params, (err: ?Error, data: ?LoadVectorTileResult) => {
                     if (err || !data) {
                         done.call(this, err);
                     } else {
@@ -230,7 +232,7 @@ class VectorTileSource extends Evented implements Source {
                         if (tile.actor) tile.actor.send('loadTile', params, done.bind(this), undefined, true);
                     }
                 }, true);
-                tile.request = {cancel};
+                tile.request = { cancel };
 
             } else {
                 tile.request = tile.actor.send('loadTile', params, done.bind(this), undefined, true);
@@ -277,14 +279,14 @@ class VectorTileSource extends Evented implements Source {
             delete tile.request;
         }
         if (tile.actor) {
-            tile.actor.send('abortTile', {uid: tile.uid, type: this.type, source: this.id});
+            tile.actor.send('abortTile', { uid: tile.uid, type: this.type, source: this.id });
         }
     }
 
     unloadTile(tile: Tile) {
         tile.unloadVectorData();
         if (tile.actor) {
-            tile.actor.send('removeTile', {uid: tile.uid, type: this.type, source: this.id});
+            tile.actor.send('removeTile', { uid: tile.uid, type: this.type, source: this.id });
         }
     }
 

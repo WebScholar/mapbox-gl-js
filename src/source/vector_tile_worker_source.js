@@ -1,13 +1,14 @@
 // @flow
 
-import {getArrayBuffer} from '../util/ajax.js';
+import { getArrayBuffer } from '../util/ajax.js';
 
 import vt from '@mapbox/vector-tile';
+import vt_cgcs2000 from '@cgcs2000/vector-tile';
 import Protobuf from 'pbf';
 import WorkerTile from './worker_tile.js';
-import {extend} from '../util/util.js';
-import {getPerformanceMeasurement} from '../util/performance.js';
-import {Evented} from '../util/evented.js';
+import { extend } from '../util/util.js';
+import { getPerformanceMeasurement } from '../util/performance.js';
+import { Evented } from '../util/evented.js';
 
 import type {
     WorkerSource,
@@ -19,8 +20,9 @@ import type {
 
 import type Actor from '../util/actor.js';
 import type StyleLayerIndex from '../style/style_layer_index.js';
-import type {Callback} from '../types/callback.js';
+import type { Callback } from '../types/callback.js';
 import type Scheduler from '../util/scheduler.js';
+import constants from '../util/constants.js';
 
 export type LoadVectorTileResult = {
     rawData: ArrayBuffer;
@@ -50,7 +52,7 @@ export class DedupedRequest {
     }
 
     request(key: string, metadata: Object, request: any, callback: LoadVectorDataCallback) {
-        const entry = this.entries[key] = this.entries[key] || {callbacks: []};
+        const entry = this.entries[key] = this.entries[key] || { callbacks: [] };
 
         if (entry.result) {
             const [err, result] = entry.result;
@@ -61,7 +63,7 @@ export class DedupedRequest {
             } else {
                 callback(err, result);
             }
-            return () => {};
+            return () => { };
         }
 
         entry.callbacks.push(callback);
@@ -105,7 +107,7 @@ export function loadVectorTile(params: RequestedTileParameters, callback: LoadVe
                 callback(err);
             } else if (data) {
                 callback(null, {
-                    vectorTile: skipParse ? undefined : new vt.VectorTile(new Protobuf(data)),
+                    vectorTile: skipParse ? undefined : new (constants.gl_projection === 'EPSG:4326' ? vt_cgcs2000 : vt).VectorTile(new Protobuf(data)),
                     rawData: data,
                     cacheControl,
                     expires
@@ -120,10 +122,10 @@ export function loadVectorTile(params: RequestedTileParameters, callback: LoadVe
 
     if (params.data) {
         // if we already got the result earlier (on the main thread), return it directly
-        this.deduped.entries[key] = {result: [null, params.data]};
+        this.deduped.entries[key] = { result: [null, params.data] };
     }
 
-    const callbackMetadata = {type: 'parseTile', isSymbolTile: params.isSymbolTile, zoom: params.tileZoom};
+    const callbackMetadata = { type: 'parseTile', isSymbolTile: params.isSymbolTile, zoom: params.tileZoom };
     return this.deduped.request(key, callbackMetadata, makeRequest, callback);
 }
 
@@ -141,8 +143,8 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
     layerIndex: StyleLayerIndex;
     availableImages: Array<string>;
     loadVectorData: LoadVectorData;
-    loading: {[_: number]: WorkerTile };
-    loaded: {[_: number]: WorkerTile };
+    loading: { [_: number]: WorkerTile };
+    loaded: { [_: number]: WorkerTile };
     deduped: DedupedRequest;
     isSpriteLoaded: boolean;
     scheduler: ?Scheduler;
@@ -199,7 +201,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
 
             // response.vectorTile will be present in the GeoJSON worker case (which inherits from this class)
             // because we stub the vector tile interface around JSON data instead of parsing it directly
-            workerTile.vectorTile = response.vectorTile || new vt.VectorTile(new Protobuf(rawTileData));
+            workerTile.vectorTile = response.vectorTile || new (constants.gl_projection === 'EPSG:4326' ? vt_cgcs2000 : vt).VectorTile(new Protobuf(rawTileData));
             const parseTile = () => {
                 workerTile.parse(workerTile.vectorTile, this.layerIndex, this.availableImages, this.actor, (err, result) => {
                     if (err || !result) return callback(err);
@@ -214,7 +216,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
                             resourceTiming.resourceTiming = JSON.parse(JSON.stringify(resourceTimingData));
                         }
                     }
-                    callback(null, extend({rawTileData: rawTileData.slice(0)}, result, cacheControl, resourceTiming));
+                    callback(null, extend({ rawTileData: rawTileData.slice(0) }, result, cacheControl, resourceTiming));
                 });
             };
 
@@ -223,7 +225,7 @@ class VectorTileWorkerSource extends Evented implements WorkerSource {
             } else {
                 this.once('isSpriteLoaded', () => {
                     if (this.scheduler) {
-                        const metadata = {type: 'parseTile', isSymbolTile: params.isSymbolTile, zoom: params.tileZoom};
+                        const metadata = { type: 'parseTile', isSymbolTile: params.isSymbolTile, zoom: params.tileZoom };
                         this.scheduler.add(parseTile, metadata);
                     } else {
                         parseTile();

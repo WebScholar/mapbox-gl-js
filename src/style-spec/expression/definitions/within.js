@@ -1,16 +1,17 @@
 // @flow
 
-import {isValue} from '../values.js';
-import type {Type} from '../types.js';
-import {BooleanType} from '../types.js';
-import type {Expression} from '../expression.js';
+import { isValue } from '../values.js';
+import type { Type } from '../types.js';
+import { BooleanType } from '../types.js';
+import type { Expression } from '../expression.js';
 import type ParsingContext from '../parsing_context.js';
 import type EvaluationContext from '../evaluation_context.js';
-import type {GeoJSON, GeoJSONPolygon, GeoJSONMultiPolygon} from '@mapbox/geojson-types';
+import type { GeoJSON, GeoJSONPolygon, GeoJSONMultiPolygon } from '@mapbox/geojson-types';
 import Point from '@mapbox/point-geometry';
-import type {CanonicalTileID} from '../../../source/tile_id.js';
+import type { CanonicalTileID } from '../../../source/tile_id.js';
+import constants from '../../../util/constants.js';
 
-type GeoJSONPolygons =| GeoJSONPolygon | GeoJSONMultiPolygon;
+type GeoJSONPolygons = | GeoJSONPolygon | GeoJSONMultiPolygon;
 
 // minX, minY, maxX, maxY
 type BBox = [number, number, number, number];
@@ -28,7 +29,7 @@ function mercatorXfromLng(lng: number) {
 }
 
 function mercatorYfromLat(lat: number) {
-    return (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
+    return constants.gl_projection === 'EPSG:4326' ? (90 - lat) / 360 : (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
 }
 
 function boxWithinBox(bbox1: BBox, bbox2: BBox) {
@@ -83,7 +84,7 @@ function perp(v1, v2) {
 }
 
 // check if p1 and p2 are in different sides of line segment q1->q2
-function  twoSided(p1, p2, q1, q2) {
+function twoSided(p1, p2, q1, q2) {
     // q1->p1 (x1, y1), q1->p2 (x2, y2), q1->q2 (x3, y3)
     const x1 = p1[0] - q1[0];
     const y1 = p1[1] - q1[1];
@@ -92,7 +93,7 @@ function  twoSided(p1, p2, q1, q2) {
     const x3 = q2[0] - q1[0];
     const y3 = q2[1] - q1[1];
     const det1 = (x1 * y3 - x3 * y1);
-    const det2 =  (x2 * y3 - x3 * y2);
+    const det2 = (x2 * y3 - x3 * y2);
     if ((det1 > 0 && det2 < 0) || (det1 < 0 && det2 > 0)) return true;
     return false;
 }
@@ -309,7 +310,7 @@ class Within implements Expression {
                 if (type === 'Polygon' || type === 'MultiPolygon') {
                     return new Within(geojson, geojson.geometry);
                 }
-            } else if (geojson.type  === 'Polygon' || geojson.type === 'MultiPolygon') {
+            } else if (geojson.type === 'Polygon' || geojson.type === 'MultiPolygon') {
                 return new Within(geojson, geojson);
             }
         }
@@ -327,7 +328,7 @@ class Within implements Expression {
         return false;
     }
 
-    eachChild() {}
+    eachChild() { }
 
     outputDefined(): boolean {
         return true;

@@ -1,7 +1,9 @@
 // @flow
 
-import LngLat, {earthRadius} from '../geo/lng_lat.js';
-import type {LngLatLike} from '../geo/lng_lat.js';
+import LngLat, { earthRadius } from '../geo/lng_lat.js';
+import { clamp } from '../util/util.js';
+import type { LngLatLike } from '../geo/lng_lat.js';
+import constants from '../util/constants.js';
 
 /*
  * The average circumference of the world in meters.
@@ -20,7 +22,7 @@ export function mercatorXfromLng(lng: number) {
 }
 
 export function mercatorYfromLat(lat: number) {
-    return (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
+    return constants.gl_projection === 'EPSG:4326' ? (90 - lat) / 360 : (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
 }
 
 export function mercatorZfromAltitude(altitude: number, lat: number) {
@@ -33,7 +35,7 @@ export function lngFromMercatorX(x: number) {
 
 export function latFromMercatorY(y: number) {
     const y2 = 180 - y * 360;
-    return 360 / Math.PI * Math.atan(Math.exp(y2 * Math.PI / 180)) - 90;
+    return constants.gl_projection === 'EPSG:4326' ? clamp(90 - y * 360, -90, 90) : 360 / Math.PI * Math.atan(Math.exp(y2 * Math.PI / 180)) - 90;
 }
 
 export function altitudeFromMercatorZ(z: number, y: number) {
@@ -101,9 +103,9 @@ class MercatorCoordinate {
         const lngLat = LngLat.convert(lngLatLike);
 
         return new MercatorCoordinate(
-                mercatorXfromLng(lngLat.lng),
-                mercatorYfromLat(lngLat.lat),
-                mercatorZfromAltitude(altitude, lngLat.lat));
+            mercatorXfromLng(lngLat.lng),
+            mercatorYfromLat(lngLat.lat),
+            mercatorZfromAltitude(altitude, lngLat.lat));
     }
 
     /**
@@ -116,8 +118,8 @@ class MercatorCoordinate {
      */
     toLngLat() {
         return new LngLat(
-                lngFromMercatorX(this.x),
-                latFromMercatorY(this.y));
+            lngFromMercatorX(this.x),
+            latFromMercatorY(this.y));
     }
 
     /**

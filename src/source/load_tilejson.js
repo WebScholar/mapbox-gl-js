@@ -1,3 +1,12 @@
+/*
+ * @Author: Bernard
+ * @Date: 2022-12-28 11:45:51
+ * @LastEditTime: 2022-12-29 10:58:57
+ * @LastEditors: Bernard
+ * @Description: 
+ * @FilePath: \mapbox-gl-js\src\source\load_tilejson.js
+ * @Copyright: ©云粒智慧科技有限公司 All rights reserved.
+ */
 // @flow
 
 import {pick, extend} from '../util/util.js';
@@ -18,7 +27,7 @@ export default function(options: any, requestManager: RequestManager, callback: 
             const result: any = pick(
                 // explicit source options take precedence over TileJSON
                 extend(tileJSON, options),
-                ['tiles', 'minzoom', 'maxzoom', 'attribution', 'mapbox_logo', 'bounds', 'scheme', 'tileSize', 'encoding']
+                ['tiles', 'minzoom', 'maxzoom', 'attribution', 'mapbox_logo', 'bounds', 'scheme', 'tileSize', 'encoding', 'zoomoffset']
             );
 
             if (tileJSON.vector_layers) {

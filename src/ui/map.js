@@ -65,6 +65,7 @@ import type {
     SourceSpecification
 } from '../style-spec/types.js';
 import type {ElevationQueryOptions} from '../terrain/elevation.js';
+import constants from '../util/constants';
 
 type ControlPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 /* eslint-disable no-use-before-define */
@@ -395,6 +396,8 @@ class Map extends Camera {
 
     constructor(options: MapOptions) {
         PerformanceUtils.mark(PerformanceMarkers.create);
+
+        if(typeof options.projection === 'string') constants.gl_projection = options.projection;
 
         options = extend({}, defaultOptions, options);
 
