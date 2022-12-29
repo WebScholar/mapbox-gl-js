@@ -205,7 +205,7 @@ const exported = {
 };
 
 //This gets automatically stripped out in production builds.
-Debug.extend(exported, {isSafari, getPerformanceMetrics: PerformanceUtils.getPerformanceMetrics, getPerformanceMetricsAsync: WorkerPerformanceUtils.getPerformanceMetricsAsync});
+// Debug.extend(exported, {isSafari, getPerformanceMetrics: PerformanceUtils.getPerformanceMetrics, getPerformanceMetricsAsync: WorkerPerformanceUtils.getPerformanceMetricsAsync});
 
 /**
  * The version of Mapbox GL JS in use as specified in `package.json`,
