@@ -7,11 +7,11 @@ import VectorTileWorkerSource from './vector_tile_worker_source.js';
 import RasterDEMTileWorkerSource from './raster_dem_tile_worker_source.js';
 import GeoJSONWorkerSource from './geojson_worker_source.js';
 import assert from 'assert';
-import {plugin as globalRTLTextPlugin} from './rtl_text_plugin.js';
-import {enforceCacheSizeLimit} from '../util/tile_request_cache.js';
-import {extend} from '../util/util.js';
-import {PerformanceUtils} from '../util/performance.js';
-import {Event} from '../util/evented.js';
+import { plugin as globalRTLTextPlugin } from './rtl_text_plugin.js';
+import { enforceCacheSizeLimit } from '../util/tile_request_cache.js';
+import { extend } from '../util/util.js';
+import { PerformanceUtils } from '../util/performance.js';
+import { Event } from '../util/evented.js';
 
 import type {
     WorkerSource,
@@ -22,10 +22,18 @@ import type {
     TileParameters
 } from '../source/worker_source.js';
 
-import type {WorkerGlobalScopeInterface} from '../util/web_worker.js';
-import type {Callback} from '../types/callback.js';
-import type {LayerSpecification} from '../style-spec/types.js';
-import type {PluginState} from './rtl_text_plugin.js';
+import type { WorkerGlobalScopeInterface } from '../util/web_worker.js';
+import type { Callback } from '../types/callback.js';
+import type { LayerSpecification } from '../style-spec/types.js';
+import type { PluginState } from './rtl_text_plugin.js';
+import constants from '../util/constants.js';
+
+// 存储坐标系
+self.onmessage = function (event) {
+    if (typeof event.data === 'string' && event.data.startsWith("EPSG")) {
+        constants.gl_projection = event.data;
+    }
+}
 
 /**
  * @private
@@ -33,11 +41,11 @@ import type {PluginState} from './rtl_text_plugin.js';
 export default class Worker {
     self: WorkerGlobalScopeInterface;
     actor: Actor;
-    layerIndexes: {[_: string]: StyleLayerIndex };
-    availableImages: {[_: string]: Array<string> };
-    workerSourceTypes: {[_: string]: Class<WorkerSource> };
-    workerSources: {[_: string]: {[_: string]: {[_: string]: WorkerSource } } };
-    demWorkerSources: {[_: string]: {[_: string]: RasterDEMTileWorkerSource } };
+    layerIndexes: { [_: string]: StyleLayerIndex };
+    availableImages: { [_: string]: Array<string> };
+    workerSourceTypes: { [_: string]: Class<WorkerSource> };
+    workerSources: { [_: string]: { [_: string]: { [_: string]: WorkerSource } } };
+    demWorkerSources: { [_: string]: { [_: string]: RasterDEMTileWorkerSource } };
     isSpriteLoaded: boolean;
     referrer: ?string;
     terrain: ?boolean;
@@ -68,7 +76,7 @@ export default class Worker {
         };
 
         // This is invoked by the RTL text plugin when the download via the `importScripts` call has finished, and the code has been parsed.
-        this.self.registerRTLTextPlugin = (rtlTextPlugin: {applyArabicShaping: Function, processBidirectionalText: Function, processStyledBidirectionalText?: Function}) => {
+        this.self.registerRTLTextPlugin = (rtlTextPlugin: { applyArabicShaping: Function, processBidirectionalText: Function, processStyledBidirectionalText?: Function }) => {
             if (globalRTLTextPlugin.isParsed()) {
                 throw new Error('RTL text plugin already registered.');
             }
@@ -121,39 +129,39 @@ export default class Worker {
         callback();
     }
 
-    updateLayers(mapId: string, params: {layers: Array<LayerSpecification>, removedIds: Array<string>}, callback: WorkerTileCallback) {
+    updateLayers(mapId: string, params: { layers: Array<LayerSpecification>, removedIds: Array<string> }, callback: WorkerTileCallback) {
         this.getLayerIndex(mapId).update(params.layers, params.removedIds);
         callback();
     }
 
-    loadTile(mapId: string, params: WorkerTileParameters & {type: string}, callback: WorkerTileCallback) {
+    loadTile(mapId: string, params: WorkerTileParameters & { type: string }, callback: WorkerTileCallback) {
         assert(params.type);
-        const p = this.enableTerrain ? extend({enableTerrain: this.terrain}, params) : params;
+        const p = this.enableTerrain ? extend({ enableTerrain: this.terrain }, params) : params;
         this.getWorkerSource(mapId, params.type, params.source).loadTile(p, callback);
     }
 
     loadDEMTile(mapId: string, params: WorkerDEMTileParameters, callback: WorkerDEMTileCallback) {
-        const p = this.enableTerrain ? extend({buildQuadTree: this.terrain}, params) : params;
+        const p = this.enableTerrain ? extend({ buildQuadTree: this.terrain }, params) : params;
         this.getDEMWorkerSource(mapId, params.source).loadTile(p, callback);
     }
 
-    reloadTile(mapId: string, params: WorkerTileParameters & {type: string}, callback: WorkerTileCallback) {
+    reloadTile(mapId: string, params: WorkerTileParameters & { type: string }, callback: WorkerTileCallback) {
         assert(params.type);
-        const p = this.enableTerrain ? extend({enableTerrain: this.terrain}, params) : params;
+        const p = this.enableTerrain ? extend({ enableTerrain: this.terrain }, params) : params;
         this.getWorkerSource(mapId, params.type, params.source).reloadTile(p, callback);
     }
 
-    abortTile(mapId: string, params: TileParameters & {type: string}, callback: WorkerTileCallback) {
+    abortTile(mapId: string, params: TileParameters & { type: string }, callback: WorkerTileCallback) {
         assert(params.type);
         this.getWorkerSource(mapId, params.type, params.source).abortTile(params, callback);
     }
 
-    removeTile(mapId: string, params: TileParameters & {type: string}, callback: WorkerTileCallback) {
+    removeTile(mapId: string, params: TileParameters & { type: string }, callback: WorkerTileCallback) {
         assert(params.type);
         this.getWorkerSource(mapId, params.type, params.source).removeTile(params, callback);
     }
 
-    removeSource(mapId: string, params: {source: string} & {type: string}, callback: WorkerTileCallback) {
+    removeSource(mapId: string, params: { source: string } & { type: string }, callback: WorkerTileCallback) {
         assert(params.type);
         assert(params.source);
 
@@ -240,7 +248,7 @@ export default class Worker {
                 },
                 scheduler: this.actor.scheduler
             };
-            this.workerSources[mapId][type][source] = new (this.workerSourceTypes[type]: any)((actor: any), this.getLayerIndex(mapId), this.getAvailableImages(mapId), this.isSpriteLoaded);
+            this.workerSources[mapId][type][source] = new (this.workerSourceTypes[type]: any) ((actor: any), this.getLayerIndex(mapId), this.getAvailableImages(mapId), this.isSpriteLoaded);
         }
 
         return this.workerSources[mapId][type][source];
